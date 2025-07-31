@@ -21,8 +21,6 @@
     "wait-on": "^7.0.0"
   },
   "dependencies": {
-    "node-llama-cpp": "^2.7.0",
-    "sqlite3": "^5.1.6",
     "uuid": "^9.0.0"
   },
   "build": {
