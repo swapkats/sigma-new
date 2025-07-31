@@ -1,9 +1,9 @@
-const { GraphService } = require('./graph');
+const { SQLiteGraphService } = require('./sqlite-graph');
 const { InferenceService } = require('./inference');
 
 class MemoryService {
   constructor() {
-    this.graphService = new GraphService();
+    this.graphService = new SQLiteGraphService();
     this.inferenceService = null; // Will be injected
     this.sessionMemory = new Map(); // Short-term memory
     this.maxSessionMemory = 20;
@@ -167,23 +167,24 @@ class MemoryService {
 
   async getMemoryStats() {
     try {
-      const session = this.graphService.driver.session();
-      const result = await session.run(`
-        MATCH (m:Message) RETURN count(m) as messages
-        UNION
-        MATCH (e:Entity) RETURN count(e) as entities  
-        UNION
-        MATCH (f:Fact) RETURN count(f) as facts
-      `);
-      
-      await session.close();
-      
-      return {
-        sessionMemory: this.sessionMemory.size,
-        totalMessages: result.records[0]?.get('messages')?.toNumber() || 0,
-        totalEntities: result.records[1]?.get('entities')?.toNumber() || 0,
-        totalFacts: result.records[2]?.get('facts')?.toNumber() || 0
-      };
+      return new Promise((resolve) => {
+        this.graphService.db.serialize(() => {
+          let stats = { sessionMemory: this.sessionMemory.size };
+          
+          this.graphService.db.get('SELECT COUNT(*) as count FROM messages', (err, row) => {
+            stats.totalMessages = err ? 0 : row.count;
+            
+            this.graphService.db.get('SELECT COUNT(*) as count FROM entities', (err, row) => {
+              stats.totalEntities = err ? 0 : row.count;
+              
+              this.graphService.db.get('SELECT COUNT(*) as count FROM facts', (err, row) => {
+                stats.totalFacts = err ? 0 : row.count;
+                resolve(stats);
+              });
+            });
+          });
+        });
+      });
     } catch (error) {
       console.error('Error getting memory stats:', error);
       return {
@@ -200,30 +201,26 @@ class MemoryService {
     try {
       console.log('Starting memory consolidation...');
       
-      // Get old conversations that haven't been consolidated
-      const session = this.graphService.driver.session();
       const cutoffTime = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days ago
       
-      const result = await session.run(`
-        MATCH (m:Message)
-        WHERE m.timestamp < $cutoffTime AND NOT EXISTS(m.consolidated)
-        RETURN m
-        ORDER BY m.timestamp
-        LIMIT 50
-      `, { cutoffTime });
+      return new Promise((resolve) => {
+        this.graphService.db.all(
+          'SELECT * FROM messages WHERE timestamp < ? ORDER BY timestamp LIMIT 50',
+          [cutoffTime],
+          (err, rows) => {
+            if (err) {
+              console.error('Memory consolidation failed:', err);
+              return resolve();
+            }
 
-      for (const record of result.records) {
-        const message = record.get('m');
-        // Extract key facts and entities, summarize conversation
-        // Mark as consolidated
-        await session.run(`
-          MATCH (m:Message {id: $id})
-          SET m.consolidated = true
-        `, { id: message.properties.id });
-      }
-
-      await session.close();
-      console.log('Memory consolidation completed');
+            // For now, just log the consolidation
+            // In a full implementation, we'd summarize and compress old memories
+            console.log(`Found ${rows.length} messages to potentially consolidate`);
+            console.log('Memory consolidation completed');
+            resolve();
+          }
+        );
+      });
     } catch (error) {
       console.error('Memory consolidation failed:', error);
     }

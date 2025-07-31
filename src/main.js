@@ -110,7 +110,7 @@ class SigmaApp {
       frame: false
     });
 
-    const isDev = process.env.NODE_ENV === 'development';
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
     
     if (isDev) {
       this.mainWindow.loadURL('http://localhost:3000');

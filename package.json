@@ -21,12 +21,7 @@
     "wait-on": "^7.0.0"
   },
   "dependencies": {
-    "@langchain/community": "^0.0.20",
-    "neo4j-driver": "^5.15.0",
-    "llamaindex": "^0.1.0",
     "node-llama-cpp": "^2.7.0",
-    "cheerio": "^1.0.0-rc.12",
-    "axios": "^1.6.0",
     "sqlite3": "^5.1.6",
     "uuid": "^9.0.0"
   },
